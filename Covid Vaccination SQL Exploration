@@ -1,0 +1,170 @@
+select * 
+from `sql-data-project-385809.covid_deaths.covidvaccinations`
+order by 3,4
+
+
+--select * 
+--from `sql-data-project-385809.covid_deaths.coviddeaths`
+--order by 3,4
+
+
+
+-- Select Data that's going to be used for this analysis
+select iso_code, location, date, total_cases, new_cases, total_deaths, population
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+order by 2,3
+
+
+
+-- Looking at total cases vs total deaths 
+-- Shows likelihood of dying if you contract covid in your country
+select iso_code, continent, location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 Death_Percentage
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+where location like '%Nigeria'
+order by total_deaths desc
+
+
+-- Looking at Total Cases vs Population
+-- Shows what percentage of people got covid per country
+
+select iso_code, continent,  location, date, total_cases, population, (total_cases/population)*100 Case_Percentage
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+where location like '%Nigeria'
+order by total_cases asc
+
+
+
+-- Looking at countries with highest infection rate compared to population  
+
+select continent,location, population, max(total_cases) Highest_Infection_Count, max((total_cases/population)*100) Infected_Percentage
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+-- where location like '%Nigeria'
+where continent is not null
+group by continent,location, population
+order by Infected_Percentage desc
+
+
+-- Looking at countries with the highest death count per population
+
+select continent, location, max(cast(total_deaths as int)) Total_Death_Count
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+-- where location like '%Nigeria'
+where continent is not null
+group by continent, location
+order by Total_Death_Count desc
+
+
+
+--select * 
+--from `sql-data-project-385809.covid_deaths.coviddeaths`
+--where continent is not null
+--order by 3,4
+
+
+
+-- LET'S BREAK THINGS DOWN BY CONTINENT
+
+select location, max(cast(total_deaths as int)) Total_Death_Count
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+-- where location like '%Nigeria'
+where continent is null
+group by location
+order by Total_Death_Count desc
+
+
+
+-- LET'S BREAK THINGS DOWN BY CONTINENT
+-- Showing continents with the highest death count per population
+
+select continent, sum(new_cases) total_cases, max(cast(total_deaths as int)) Total_Death_Count
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+-- where location like '%Nigeria'
+where continent is not null
+group by continent
+order by Total_Death_Count desc
+
+
+-- Global Numbers 
+
+select continent, date, sum(total_cases) Total_Cases, sum(cast(new_deaths as int)) Total_Deaths --, sum(cast(new_deaths as int))/sum(new_cases) * 100 Dath_Percentage
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+--where location like '%Nigeria'
+where continent is not null
+group by continent, date
+order by 1,2
+
+
+
+--Global Numbers
+select sum(new_cases) total_cases, sum(cast(new_deaths as int)) total_deaths, sum(cast(new_deaths as int))/sum(new_cases) * 100 Death_percentage
+from `sql-data-project-385809.covid_deaths.coviddeaths`
+where continent is not null
+order by 1,2
+
+
+
+-- looking at the covid vaccinations table
+select * 
+from `sql-data-project-385809.covid_deaths.covidvaccinations`
+
+
+-- joining the tables 
+select * 
+from `sql-data-project-385809.covid_deaths.coviddeaths` dea
+Join `sql-data-project-385809.covid_deaths.covidvaccinations` vac
+  on dea.location = vac.location
+  and dea.date = vac.date
+
+
+-- Using CTE  to get total population vs new vaccinations
+with popvsvacc
+as 
+(select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, sum(cast(vac.new_vaccinations as int)) over (partition by dea.location order by dea.location, dea.date) rolling_vaccination_count, 
+from `sql-data-project-385809.covid_deaths.coviddeaths` dea
+Join `sql-data-project-385809.covid_deaths.covidvaccinations` vac
+  on dea.location = vac.location
+  and dea.date = vac.date
+where dea.continent is not null)
+select *, (rolling_vaccination_count/population)*100 vaccination_count_by_people_percentage
+from popvsvacc
+
+
+--with popvsvac (continent, location, date, population, new_vaccinations, rolling_vaccination_report)
+
+
+
+--TEMP TBLE 
+
+drop table if exists `sql-data-project-385809.covid_deaths.percent_pop_vaccinated` 
+create table `sql-data-project-385809.covid_deaths.percent_pop_vaccinated` 
+(
+continent bytes(255),
+location bytes(255),
+date datetime,
+population numeric,
+new_vaccinations numeric,
+rolling_vaccination_count numeric
+)
+
+insert into `sql-data-project-385809.covid_deaths.percent_pop_vaccinated`  
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, sum(cast(vac.new_vaccinations as int)) over (partition by dea.location order by dea.location, dea.date) rolling_vaccination_count
+from `sql-data-project-385809.covid_deaths.coviddeaths` dea
+Join `sql-data-project-385809.covid_deaths.covidvaccinations` vac
+  on dea.location = vac.location
+  and dea.date = vac.date
+where dea.continent is not null
+
+select *, (rolling_vaccination_count/population)*100 vaccination_count_by_people_percentage
+from `sql-data-project-385809.covid_deaths.percent_pop_vaccinated`  
+
+
+
+-- Creating view to store data for later visualizations
+create view `sql-data-project-385809.covid_deaths.percent_pop_vaccinated` as 
+select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, sum(cast(vac.new_vaccinations as int)) over (partition by dea.location order by dea.location, dea.date) rolling_vaccination_count
+from `sql-data-project-385809.covid_deaths.coviddeaths` dea
+Join `sql-data-project-385809.covid_deaths.covidvaccinations` vac
+  on dea.location = vac.location
+  and dea.date = vac.date
+where dea.continent is not null
+--order by 2,3
